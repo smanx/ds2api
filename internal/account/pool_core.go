@@ -46,7 +46,7 @@ func (p *Pool) Reset() {
 	ids := make([]string, 0, len(accounts))
 	for _, a := range accounts {
 		id := a.Identifier()
-		if id != "" {
+		if id != "" && !a.IsBanned {
 			ids = append(ids, id)
 		}
 	}

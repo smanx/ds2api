@@ -52,7 +52,7 @@ func (c *Client) GetSessionCount(ctx context.Context, a *auth.RequestAuth, maxAt
 		// 构建请求 URL
 		reqURL := dsprotocol.DeepSeekFetchSessionURL + "?lte_cursor.pinned=false"
 
-		resp, status, err := c.getJSONWithStatus(ctx, clients.regular, reqURL, headers)
+		resp, status, err := c.getJSONWithStatus(ctx, clients.regular, clients.fallback, reqURL, headers)
 		if err != nil {
 			config.Logger.Warn("[get_session_count] request error", "error", err, "account", a.AccountID)
 			attempts++
@@ -112,7 +112,7 @@ func (c *Client) GetSessionCountForToken(ctx context.Context, token string) (*Se
 	headers := c.authHeaders(token)
 	reqURL := dsprotocol.DeepSeekFetchSessionURL + "?lte_cursor.pinned=false"
 
-	resp, status, err := c.getJSONWithStatus(ctx, clients.regular, reqURL, headers)
+	resp, status, err := c.getJSONWithStatus(ctx, clients.regular, clients.fallback, reqURL, headers)
 	if err != nil {
 		return nil, err
 	}
@@ -205,7 +205,7 @@ func (c *Client) FetchSessionPage(ctx context.Context, a *auth.RequestAuth, curs
 	}
 	reqURL := dsprotocol.DeepSeekFetchSessionURL + "?" + params.Encode()
 
-	resp, status, err := c.getJSONWithStatus(ctx, clients.regular, reqURL, headers)
+	resp, status, err := c.getJSONWithStatus(ctx, clients.regular, clients.fallback, reqURL, headers)
 	if err != nil {
 		return nil, false, err
 	}

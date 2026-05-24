@@ -49,7 +49,21 @@ func NewApp() (*App, error) {
 	pool := account.NewPool(store)
 	var dsClient *dsclient.Client
 	resolver := auth.NewResolver(store, pool, func(ctx context.Context, acc config.Account) (string, error) {
-		return dsClient.Login(ctx, acc)
+		token, err := dsClient.Login(ctx, acc)
+		if err != nil {
+			return "", err
+		}
+		// 登录成功后检查账号是否被封
+		banStatus, banErr := dsClient.CheckAccountBanned(ctx, token, acc)
+		if banErr == nil && banStatus != nil {
+			if banErr := store.UpdateAccountBanStatus(acc.Identifier(), banStatus.IsBanned, banStatus.MuteUntil); banErr != nil {
+				config.Logger.Warn("[auth] update account ban status failed", "account", acc.Identifier(), "error", banErr)
+			}
+			if banStatus.IsBanned {
+				return "", fmt.Errorf("account is banned")
+			}
+		}
+		return token, nil
 	})
 	dsClient = dsclient.NewClient(store, resolver)
 	if err := dsClient.PreloadPow(context.Background()); err != nil {

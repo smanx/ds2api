@@ -50,6 +50,54 @@ func (c *Client) Login(ctx context.Context, acc config.Account) (string, error) 
 	return token, nil
 }
 
+type AccountBanStatus struct {
+	IsBanned  bool
+	MuteUntil int64
+}
+
+func (c *Client) CheckAccountBanned(ctx context.Context, token string, acc config.Account) (*AccountBanStatus, error) {
+	clients := c.requestClientsForAccount(acc)
+	headers := c.authHeaders(token)
+	resp, status, err := c.getJSONWithStatus(ctx, clients.regular, clients.fallback, dsprotocol.DeepSeekCurrentUserURL, headers)
+	if err != nil {
+		config.Logger.Warn("[deepseek] check account banned failed", "account", acc.Identifier(), "error", err)
+		return nil, err
+	}
+	if status != http.StatusOK {
+		config.Logger.Warn("[deepseek] check account banned failed", "account", acc.Identifier(), "status", status)
+		return nil, fmt.Errorf("status code: %d", status)
+	}
+	code := intFrom(resp["code"])
+	if code != 0 {
+		config.Logger.Warn("[deepseek] check account banned failed", "account", acc.Identifier(), "code", code)
+		return nil, fmt.Errorf("api code: %d", code)
+	}
+	data, _ := resp["data"].(map[string]any)
+	bizData, _ := data["biz_data"].(map[string]any)
+	chat, _ := bizData["chat"].(map[string]any)
+	isMuted, _ := chat["is_muted"].(bool)
+	if !isMuted {
+		isMutedInt := intFrom(chat["is_muted"])
+		isMuted = isMutedInt == 1
+	}
+	var muteUntil int64
+	switch v := chat["mute_until"].(type) {
+	case float64:
+		muteUntil = int64(v)
+	case int64:
+		muteUntil = v
+	case int:
+		muteUntil = int64(v)
+	}
+	if isMuted {
+		config.Logger.Warn("[deepseek] account is banned", "account", acc.Identifier(), "mute_until", muteUntil)
+	}
+	return &AccountBanStatus{
+		IsBanned:  isMuted,
+		MuteUntil: muteUntil,
+	}, nil
+}
+
 func (c *Client) CreateSession(ctx context.Context, a *auth.RequestAuth, maxAttempts int) (string, error) {
 	if maxAttempts <= 0 {
 		maxAttempts = c.maxRetries

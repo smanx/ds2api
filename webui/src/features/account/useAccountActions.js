@@ -11,9 +11,11 @@ export function useAccountActions({ apiFetch, t, onMessage, onRefresh, config, f
     const [newAccount, setNewAccount] = useState({ name: '', remark: '', email: '', mobile: '', password: '' })
     const [editAccount, setEditAccount] = useState({ name: '', remark: '' })
     const [loading, setLoading] = useState(false)
-    const [testing, setTesting] = useState({})
-    const [testingAll, setTestingAll] = useState(false)
-    const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0, results: [] })
+    const [testing, setTesting] = useState({});
+    const [testingAll, setTestingAll] = useState(false);
+    const [checkingBan, setCheckingBan] = useState({});
+    const [checkingAllBans, setCheckingAllBans] = useState(false);
+    const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0, results: [] });
     const [sessionCounts, setSessionCounts] = useState({})
     const [deletingSessions, setDeletingSessions] = useState({})
     const [updatingProxy, setUpdatingProxy] = useState({})
@@ -345,6 +347,81 @@ export function useAccountActions({ apiFetch, t, onMessage, onRefresh, config, f
         }
     }
 
+    const checkAccountBanStatus = async (identifier) => {
+        const accountID = String(identifier || '').trim()
+        if (!accountID) {
+            onMessage('error', t('accountManager.invalidIdentifier'))
+            return
+        }
+        setCheckingBan(prev => ({ ...prev, [accountID]: true }))
+        try {
+            const res = await apiFetch('/admin/accounts/check-ban', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ identifier: accountID }),
+            })
+            const data = await res.json()
+            if (data.success) {
+                onMessage(data.is_banned ? 'warning' : 'success', data.is_banned ? t('accountManager.accountBanned') : t('accountManager.accountNotBanned'))
+            } else {
+                onMessage('error', data.message || t('messages.requestFailed'))
+            }
+            fetchAccounts()
+            onRefresh()
+        } catch (e) {
+            onMessage('error', t('messages.networkError'))
+        } finally {
+            setCheckingBan(prev => ({ ...prev, [accountID]: false }))
+        }
+    }
+
+    const checkAllAccountsBanStatus = async () => {
+        if (!confirm(t('accountManager.checkBanConfirm'))) return
+        const allAccounts = config.accounts || []
+        if (allAccounts.length === 0) return
+
+        setCheckingAllBans(true)
+        setBatchProgress({ current: 0, total: allAccounts.length, results: [] })
+
+        let bannedCount = 0
+        let normalCount = 0
+        const results = []
+
+        for (let i = 0; i < allAccounts.length; i++) {
+            const acc = allAccounts[i]
+            const id = resolveAccountIdentifier(acc)
+            if (!id) {
+                results.push({ id: '-', success: false, message: t('accountManager.invalidIdentifier') })
+                setBatchProgress({ current: i + 1, total: allAccounts.length, results: [...results] })
+                continue
+            }
+
+            try {
+                const res = await apiFetch('/admin/accounts/check-ban', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ identifier: id }),
+                })
+                const data = await res.json()
+                results.push({ id, success: data.success, is_banned: data.is_banned, message: data.message })
+                if (data.is_banned) {
+                    bannedCount++
+                } else {
+                    normalCount++
+                }
+            } catch (e) {
+                results.push({ id, success: false, message: e.message })
+            }
+
+            setBatchProgress({ current: i + 1, total: allAccounts.length, results: [...results] })
+        }
+
+        onMessage('success', t('accountManager.checkBanAllCompleted', { banned: bannedCount, normal: normalCount }))
+        fetchAccounts()
+        onRefresh()
+        setCheckingAllBans(false)
+    }
+
     return {
         showAddKey,
         openAddKey,
@@ -369,6 +446,8 @@ export function useAccountActions({ apiFetch, t, onMessage, onRefresh, config, f
         loading,
         testing,
         testingAll,
+        checkingBan,
+        checkingAllBans,
         batchProgress,
         sessionCounts,
         deletingSessions,
@@ -380,6 +459,8 @@ export function useAccountActions({ apiFetch, t, onMessage, onRefresh, config, f
         deleteAccount,
         testAccount,
         testAllAccounts,
+        checkAccountBanStatus,
+        checkAllAccountsBanStatus,
         deleteAllSessions,
         updateAccountProxy,
     }

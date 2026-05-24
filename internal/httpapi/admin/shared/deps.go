@@ -17,6 +17,7 @@ type ConfigStore interface {
 	FindAccount(identifier string) (config.Account, bool)
 	UpdateAccountToken(identifier, token string) error
 	UpdateAccountTestStatus(identifier, status string) error
+	UpdateAccountBanStatus(identifier string, isBanned bool, muteUntil int64) error
 	AccountTestStatus(identifier string) (string, bool)
 	Update(mutator func(*config.Config) error) error
 	ExportJSONAndBase64() (string, string, error)
@@ -57,6 +58,7 @@ type DeepSeekCaller interface {
 	CallCompletion(ctx context.Context, a *auth.RequestAuth, payload map[string]any, powResp string, maxAttempts int) (*http.Response, error)
 	GetSessionCountForToken(ctx context.Context, token string) (*dsclient.SessionStats, error)
 	DeleteAllSessionsForToken(ctx context.Context, token string) error
+	CheckAccountBanned(ctx context.Context, token string, acc config.Account) (*dsclient.AccountBanStatus, error)
 }
 
 var _ ConfigStore = (*config.Store)(nil)

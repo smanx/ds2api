@@ -297,3 +297,121 @@ func (h *Handler) deleteAllSessions(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "message": "删除成功"})
 }
+
+func (h *Handler) checkAccountBanStatus(w http.ResponseWriter, r *http.Request) {
+	var req map[string]any
+	_ = json.NewDecoder(r.Body).Decode(&req)
+	identifier, _ := req["identifier"].(string)
+	if strings.TrimSpace(identifier) == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"detail": "需要账号标识（identifier / email / mobile）"})
+		return
+	}
+	acc, ok := findAccountByIdentifier(h.Store, identifier)
+	if !ok {
+		writeJSON(w, http.StatusNotFound, map[string]any{"detail": "账号不存在"})
+		return
+	}
+
+	// 登录获取 token
+	authCtx := &authn.RequestAuth{UseConfigToken: false, AccountID: acc.Identifier(), Account: acc}
+	proxyCtx := authn.WithAuth(r.Context(), authCtx)
+	token, err := h.DS.Login(proxyCtx, acc)
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"success": false, "message": "登录失败: " + err.Error()})
+		return
+	}
+	_ = h.Store.UpdateAccountToken(acc.Identifier(), token)
+	authCtx.DeepSeekToken = token
+
+	// 检查封号状态
+	banStatus, err := h.DS.CheckAccountBanned(proxyCtx, token, acc)
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"success": false, "message": "检查封号状态失败: " + err.Error()})
+		return
+	}
+
+	// 更新账号状态
+	if err := h.Store.UpdateAccountBanStatus(acc.Identifier(), banStatus.IsBanned, banStatus.MuteUntil); err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"success": false, "message": "更新账号状态失败: " + err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success":       true,
+		"account":       acc.Identifier(),
+		"is_banned":     banStatus.IsBanned,
+		"mute_until":    banStatus.MuteUntil,
+	})
+}
+
+func (h *Handler) checkAllAccountsBanStatus(w http.ResponseWriter, r *http.Request) {
+	accounts := h.Store.Snapshot().Accounts
+	if len(accounts) == 0 {
+		writeJSON(w, http.StatusOK, map[string]any{"total": 0, "banned": 0, "normal": 0, "results": []any{}})
+		return
+	}
+
+	// 并发检查
+	const maxConcurrency = 5
+	results := runAccountTestsConcurrently(accounts, maxConcurrency, func(_ int, account config.Account) map[string]any {
+		return h.checkSingleAccountBanStatus(r.Context(), account)
+	})
+
+	banned := 0
+	normal := 0
+	for _, res := range results {
+		if ok, _ := res["is_banned"].(bool); ok {
+			banned++
+		} else {
+			normal++
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"total": len(accounts), "banned": banned, "normal": normal, "results": results})
+}
+
+func (h *Handler) checkSingleAccountBanStatus(ctx context.Context, acc config.Account) map[string]any {
+	identifier := acc.Identifier()
+	result := map[string]any{
+		"account":       identifier,
+		"success":       false,
+		"is_banned":     false,
+		"mute_until":    int64(0),
+		"message":       "",
+	}
+
+	// 登录获取 token
+	authCtx := &authn.RequestAuth{UseConfigToken: false, AccountID: identifier, Account: acc}
+	proxyCtx := authn.WithAuth(ctx, authCtx)
+	token, err := h.DS.Login(proxyCtx, acc)
+	if err != nil {
+		result["message"] = "登录失败: " + err.Error()
+		return result
+	}
+	_ = h.Store.UpdateAccountToken(identifier, token)
+	authCtx.DeepSeekToken = token
+
+	// 检查封号状态
+	banStatus, err := h.DS.CheckAccountBanned(proxyCtx, token, acc)
+	if err != nil {
+		result["message"] = "检查封号状态失败: " + err.Error()
+		return result
+	}
+
+	// 更新账号状态
+	if err := h.Store.UpdateAccountBanStatus(identifier, banStatus.IsBanned, banStatus.MuteUntil); err != nil {
+		result["message"] = "检查成功，但更新状态失败: " + err.Error()
+	} else {
+		result["success"] = true
+	}
+
+	result["is_banned"] = banStatus.IsBanned
+	result["mute_until"] = banStatus.MuteUntil
+	if banStatus.IsBanned {
+		result["message"] = "账号已被封禁"
+	} else {
+		result["message"] = "账号正常"
+	}
+
+	return result
+}

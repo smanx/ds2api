@@ -63,6 +63,11 @@ func (p *Pool) canAcquireIDLocked(accountID string) bool {
 	if accountID == "" {
 		return false
 	}
+	// 检查账号是否被封号
+	acc, ok := p.store.FindAccount(accountID)
+	if ok && acc.IsBanned {
+		return false
+	}
 	if p.inUse[accountID] >= p.maxInflightPerAccount {
 		return false
 	}

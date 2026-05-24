@@ -8,6 +8,8 @@ export default function AccountsTable({
     loadingAccounts,
     testing,
     testingAll,
+    checkingBan,
+    checkingAllBans,
     batchProgress,
     sessionCounts,
     deletingSessions,
@@ -19,9 +21,11 @@ export default function AccountsTable({
     resolveAccountIdentifier,
     proxies,
     onTestAll,
+    onCheckBanAll,
     onShowAddAccount,
     onEditAccount,
     onTestAccount,
+    onCheckBanAccount,
     onDeleteAccount,
     onDeleteAllSessions,
     onUpdateAccountProxy,
@@ -64,6 +68,14 @@ export default function AccountsTable({
                         {t('accountManager.testAll')}
                     </button>
                     <button
+                        onClick={onCheckBanAll}
+                        disabled={checkingAllBans || totalAccounts === 0}
+                        className="flex items-center px-3 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors text-xs font-medium border border-border disabled:opacity-50"
+                    >
+                        {checkingAllBans ? <span className="animate-spin mr-2">⟳</span> : <Play className="w-3 h-3 mr-2" />}
+                        {t('accountManager.checkBanAll')}
+                    </button>
+                    <button
                         onClick={onShowAddAccount}
                         className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors font-medium text-sm shadow-sm"
                     >
@@ -100,6 +112,33 @@ export default function AccountsTable({
                 </div>
             )}
 
+            {checkingAllBans && batchProgress.total > 0 && (
+                <div className="p-4 border-b border-border bg-muted/30">
+                    <div className="flex items-center justify-between text-sm mb-2">
+                        <span className="font-medium">{t('accountManager.checkingAllBans')}</span>
+                        <span className="text-muted-foreground">{batchProgress.current} / {batchProgress.total}</span>
+                    </div>
+                    <div className="w-full bg-muted rounded-full h-2 overflow-hidden mb-4">
+                        <div
+                            className="bg-primary h-full transition-all duration-300"
+                            style={{ width: `${(batchProgress.current / batchProgress.total) * 100}%` }}
+                        />
+                    </div>
+                    {batchProgress.results.length > 0 && (
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 max-h-32 overflow-y-auto custom-scrollbar">
+                            {batchProgress.results.map((r, i) => (
+                                <div key={i} className={clsx(
+                                    "text-xs px-2 py-1 rounded border truncate",
+                                    r.is_banned ? "bg-red-500/10 border-red-500/20 text-red-500" : "bg-emerald-500/10 border-emerald-500/20 text-emerald-500"
+                                )}>
+                                    {r.is_banned ? '✗' : '✓'} {r.id}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+
             <div className="divide-y divide-border">
                 {loadingAccounts ? (
                     <div className="p-8 text-center text-muted-foreground">{t('actions.loading')}</div>
@@ -114,12 +153,20 @@ export default function AccountsTable({
                                 <div className="flex items-center gap-3 min-w-0">
                                     <div className={clsx(
                                         "w-2 h-2 rounded-full shrink-0",
+                                        acc.is_banned ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]" :
                                         acc.test_status === 'failed' ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]" :
                                         isActive ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" :
                                         runtimeUnknown ? "bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" : "bg-amber-500"
                                     )} />
                                     <div className="min-w-0">
-                                        <div className="text-sm font-medium truncate">{acc.name || '-'}</div>
+                                        <div className="text-sm font-medium truncate flex items-center gap-2">
+                                            {acc.name || '-'}
+                                            {acc.is_banned && (
+                                                <span className="text-xs text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded font-medium">
+                                                    Banned
+                                                </span>
+                                            )}
+                                        </div>
                                         <div
                                             className="font-medium truncate flex items-center gap-1.5 cursor-pointer hover:text-primary transition-colors group"
                                             onClick={() => copyId(id)}
@@ -134,7 +181,11 @@ export default function AccountsTable({
                                             <div className="text-xs text-muted-foreground truncate mt-0.5">{acc.remark}</div>
                                         )}
                                         <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
-                                            <span>{acc.test_status === 'failed' ? t('accountManager.testStatusFailed') : isActive ? t('accountManager.sessionActive') : runtimeUnknown ? t('accountManager.runtimeStatusUnknown') : t('accountManager.reauthRequired')}</span>
+                                            {acc.is_banned ? (
+                                                <span className="text-red-500">{t('accountManager.accountBanned')}</span>
+                                            ) : (
+                                                <span>{acc.test_status === 'failed' ? t('accountManager.testStatusFailed') : isActive ? t('accountManager.sessionActive') : runtimeUnknown ? t('accountManager.runtimeStatusUnknown') : t('accountManager.reauthRequired')}</span>
+                                            )}
                                             {acc.token_preview && (
                                                 <span className="font-mono bg-muted px-1.5 py-0.5 rounded text-[10px]">
                                                     {acc.token_preview}
@@ -145,7 +196,7 @@ export default function AccountsTable({
                                                     {t('accountManager.sessionCount', { count: sessionCounts[id] })}
                                                 </span>
                                             )}
-                                            {sessionCounts && sessionCounts[id] !== undefined && sessionCounts[id] > 0 && (
+                                            {sessionCounts && sessionCounts[id] !== undefined && sessionCounts[id] > 0 && !acc.is_banned && (
                                                 <button
                                                     onClick={() => onDeleteAllSessions(id)}
                                                     disabled={deletingSessions && deletingSessions[id]}
@@ -190,12 +241,21 @@ export default function AccountsTable({
                                         <Pencil className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
                                     </button>
                                     <button
-                                        onClick={() => onTestAccount(id)}
-                                        disabled={testing[id]}
+                                        onClick={() => onCheckBanAccount(id)}
+                                        disabled={checkingBan[id]}
                                         className="px-2 lg:px-3 py-1 lg:py-1.5 text-[10px] lg:text-xs font-medium border border-border rounded-md hover:bg-secondary transition-colors disabled:opacity-50"
                                     >
-                                        {testing[id] ? t('actions.testing') : t('actions.test')}
+                                        {checkingBan[id] ? t('accountManager.checkingBan') : t('accountManager.checkBan')}
                                     </button>
+                                    {!acc.is_banned && (
+                                        <button
+                                            onClick={() => onTestAccount(id)}
+                                            disabled={testing[id]}
+                                            className="px-2 lg:px-3 py-1 lg:py-1.5 text-[10px] lg:text-xs font-medium border border-border rounded-md hover:bg-secondary transition-colors disabled:opacity-50"
+                                        >
+                                            {testing[id] ? t('actions.testing') : t('actions.test')}
+                                        </button>
+                                    )}
                                     <button
                                         onClick={() => onDeleteAccount(id)}
                                         className="p-1 lg:p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors"

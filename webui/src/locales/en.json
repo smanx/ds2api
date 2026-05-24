@@ -124,8 +124,11 @@
         "accountsTitle": "DeepSeek Accounts",
         "accountsDesc": "Manage the DeepSeek account pool and edit name/remark.",
         "testAll": "Refresh all tokens",
+        "checkBanAll": "Check all ban status",
+        "checkBan": "Check ban",
         "addAccount": "Add account",
         "testingAllAccounts": "Refreshing tokens for all accounts...",
+        "checkingAllBans": "Checking ban status for all accounts...",
         "sessionActive": "Session active",
         "reauthRequired": "Retest status required",
         "runtimeStatusUnknown": "Will be determined after sync",
@@ -175,7 +178,12 @@
         "envModeRiskDesc": "Detected DS2API_CONFIG_JSON. If DS2API_ENV_WRITEBACK is not enabled, Admin UI edits are in-memory only and may be lost after restart.",
         "envModeWritebackPendingTitle": "Env mode + auto-persistence enabled (pending file handoff)",
         "envModeWritebackActiveTitle": "Env mode + auto-persistence active",
-        "envModeWritebackDesc": "The app will auto-create/write the config file and transition to file-backed mode. Current persistence path: {path}"
+        "envModeWritebackDesc": "The app will auto-create/write the config file and transition to file-backed mode. Current persistence path: {path}",
+        "accountBanned": "Account is banned",
+        "accountNotBanned": "Account is active",
+        "checkBanConfirm": "Check ban status for all accounts?",
+        "checkBanAllCompleted": "Completed: {banned} banned, {normal} active",
+        "checkingBan": "Checking..."
     },
     "proxyManager": {
         "title": "Proxy IPs",

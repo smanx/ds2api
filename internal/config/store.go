@@ -220,6 +220,19 @@ func (s *Store) UpdateAccountToken(identifier, token string) error {
 	return s.saveLocked()
 }
 
+func (s *Store) UpdateAccountBanStatus(identifier string, isBanned bool, muteUntil int64) error {
+	identifier = strings.TrimSpace(identifier)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	idx, ok := s.findAccountIndexLocked(identifier)
+	if !ok {
+		return errors.New("account not found")
+	}
+	s.cfg.Accounts[idx].IsBanned = isBanned
+	s.cfg.Accounts[idx].MuteUntil = muteUntil
+	return s.saveLocked()
+}
+
 func (s *Store) Replace(cfg Config) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

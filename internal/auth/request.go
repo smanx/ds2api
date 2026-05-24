@@ -39,6 +39,7 @@ type LoginFunc func(ctx context.Context, acc config.Account) (string, error)
 type Resolver struct {
 	Store *config.Store
 	Pool  *account.Pool
+	DS    interface{} // 会是 *dsclient.Client，但避免循环导入
 	Login LoginFunc
 
 	mu               sync.Mutex
